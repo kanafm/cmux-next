@@ -151,6 +151,7 @@ private struct FeedSecondaryFilterButton: View {
 /// changes don't invalidate rows unnecessarily. Receives items as a
 /// plain value so its body never touches the live store, the parent
 /// owns the observation.
+@MainActor
 private struct FeedListView: View {
     let filter: FeedPanelView.Filter
     let items: [WorkstreamItem]
@@ -252,7 +253,7 @@ private struct FeedListView: View {
         }
     }
 
-    private func stableScrollSurface(
+    @MainActor    private func stableScrollSurface(
         snapshots: [FeedItemSnapshot],
         actions: FeedRowActions
     ) -> some View {
@@ -272,7 +273,7 @@ private struct FeedListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func stableRows(
+    @MainActor    private func stableRows(
         snapshots: [FeedItemSnapshot],
         actions: FeedRowActions
     ) -> some View {
@@ -288,7 +289,7 @@ private struct FeedListView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func historyList(
+    @MainActor    private func historyList(
         snapshots: [FeedItemSnapshot],
         actions: FeedRowActions,
         showsLoadMore: Bool
@@ -324,7 +325,7 @@ private struct FeedListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func rowSurface(
+    @MainActor    private func rowSurface(
         snapshot: FeedItemSnapshot,
         actions: FeedRowActions,
         showsDivider: Bool
@@ -410,7 +411,7 @@ private struct FeedListView: View {
         filter == .activity && hasMorePersistedItems
     }
 
-    private func selectRow(_ id: UUID, focusFeed: Bool) {
+    @MainActor    private func selectRow(_ id: UUID, focusFeed: Bool) {
         let selectionChanged = focusSnapshot.selectedItemId != id
         let window = activeFeedWindow()
 #if DEBUG
@@ -442,7 +443,7 @@ private struct FeedListView: View {
 #endif
     }
 
-    private func focusFirstVisibleItem(in snapshots: [FeedItemSnapshot], focusHost: Bool = true) {
+    @MainActor    private func focusFirstVisibleItem(in snapshots: [FeedItemSnapshot], focusHost: Bool = true) {
         guard let targetId = preferredFocusItemId(in: snapshots) else {
             let window = activeFeedWindow()
             if focusHost {
@@ -465,7 +466,7 @@ private struct FeedListView: View {
         scrollRequest = FeedScrollRequest(id: targetId, sequence: scrollRequestSequence)
     }
 
-    private func preferredFocusItemId(in snapshots: [FeedItemSnapshot]) -> UUID? {
+    @MainActor    private func preferredFocusItemId(in snapshots: [FeedItemSnapshot]) -> UUID? {
         let ids = snapshots.map(\.id)
         let window = activeFeedWindow()
         if let controllerSelectedId = AppDelegate.shared?
@@ -483,7 +484,7 @@ private struct FeedListView: View {
         return ids.first
     }
 
-    private func moveSelection(in snapshots: [FeedItemSnapshot], delta: Int) {
+    @MainActor    private func moveSelection(in snapshots: [FeedItemSnapshot], delta: Int) {
         guard !snapshots.isEmpty else { return }
         let ids = snapshots.map(\.id)
         let targetIndex: Int
@@ -511,7 +512,7 @@ private struct FeedListView: View {
 #endif
     }
 
-    private func activateSelection(
+    @MainActor    private func activateSelection(
         in snapshots: [FeedItemSnapshot],
         actions: FeedRowActions
     ) {
@@ -531,7 +532,7 @@ private struct FeedListView: View {
         NSApp.keyWindow ?? NSApp.mainWindow
     }
 
-    private func syncFeedFocusSnapshot(window: NSWindow? = nil) {
+    @MainActor    private func syncFeedFocusSnapshot(window: NSWindow? = nil) {
         let targetWindow = window ?? activeFeedWindow()
         guard let controller = AppDelegate.shared?.keyboardFocusCoordinator(for: targetWindow) else {
             return

@@ -14,7 +14,7 @@ extension Notification.Name {
     static let reactGrabDidCopySelection = Notification.Name("cmux.reactGrabDidCopySelection")
 }
 
-nonisolated private struct SocketLineProcessingResult: Sendable {
+private struct SocketLineProcessingResult: Sendable {
     let response: String
     let authenticated: Bool
 }
@@ -8056,7 +8056,13 @@ class TerminalController {
         let imagePaths = params["image_paths"] as? [String] ?? []
 
         let semaphore = DispatchSemaphore(value: 0)
-        var result: V2CallResult = .err(code: "internal_error", message: "Feedback submission failed", data: nil)
+        // Wrap the mutable result in a class so the Task closure can update
+        // it by reference (Swift's strict concurrency disallows capturing a
+        // local `var` for cross-context mutation).
+        final class ResultBox: @unchecked Sendable {
+            var value: V2CallResult = .err(code: "internal_error", message: "Feedback submission failed", data: nil)
+        }
+        let box = ResultBox()
 
         Task {
             let resolved: V2CallResult
@@ -8083,7 +8089,7 @@ class TerminalController {
                 resolved = .err(code: "internal_error", message: error.localizedDescription, data: nil)
             }
 
-            result = resolved
+            box.value = resolved
             semaphore.signal()
         }
 
@@ -8091,7 +8097,7 @@ class TerminalController {
             return .err(code: "timeout", message: "Feedback submission timed out", data: nil)
         }
 
-        return result
+        return box.value
     }
 
     // MARK: - V2 Feed (workstream) handlers

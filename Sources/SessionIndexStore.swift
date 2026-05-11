@@ -3,7 +3,11 @@ import Bonsplit
 import CMUXAgentLaunch
 import Combine
 import Foundation
+#if CMUX_NIX_BUILD
+import CMUXSQLite
+#else
 import SQLite3
+#endif
 
 // MARK: - Parsed metadata cache
 
@@ -460,7 +464,7 @@ final class SessionIndexStore: ObservableObject {
         invalidateDirectorySnapshots()
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             let scanned = await Self.scanAll()
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self else { return }
                 if Task.isCancelled { return }
                 self.entries = scanned

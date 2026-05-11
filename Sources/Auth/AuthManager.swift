@@ -10,7 +10,7 @@ import Security
 private final class AuthPresentationContext: NSObject, ASWebAuthenticationPresentationContextProviding {
     static let shared = AuthPresentationContext()
 
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    @MainActor    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         // ASWebAuthenticationSession invokes this on whichever thread called
         // session.start(). When beginSignIn() fires from the socket command
         // dispatch thread (cmux auth login), this callback lands off-main,

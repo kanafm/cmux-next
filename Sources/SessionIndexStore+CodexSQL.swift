@@ -1,5 +1,9 @@
 import Foundation
+#if CMUX_NIX_BUILD
+import CMUXSQLite
+#else
 import SQLite3
+#endif
 
 extension SessionIndexStore {
     private struct CodexThreadRecord: Sendable {

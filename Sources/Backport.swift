@@ -30,15 +30,11 @@ enum BackportKeyPressResult {
 
 extension Backport where Content: View {
     func pointerStyle(_ style: BackportPointerStyle?) -> some View {
-        #if canImport(AppKit)
-        if #available(macOS 15, *) {
-            return content.pointerStyle(style?.official)
-        } else {
-            return content
-        }
-        #else
+        // The real `pointerStyle(_:)` modifier ships with macOS 15 SDK.
+        // The Nix build uses apple-sdk-14.4 from nixpkgs, so the SDK doesn't
+        // expose this symbol at compile time. Stub it to a no-op; pointer-style
+        // hints are non-essential.
         return content
-        #endif
     }
 
     /// Backported onKeyPress that works on macOS 14+ and is a no-op on macOS 13.
@@ -74,23 +70,6 @@ enum BackportPointerStyle {
     case resizeUpDown
     case resizeLeftRight
 
-    #if canImport(AppKit)
-    @available(macOS 15, *)
-    var official: PointerStyle {
-        switch self {
-        case .default: return .default
-        case .grabIdle: return .grabIdle
-        case .grabActive: return .grabActive
-        case .horizontalText: return .horizontalText
-        case .verticalText: return .verticalText
-        case .link: return .link
-        case .resizeLeft: return .frameResize(position: .trailing, directions: [.inward])
-        case .resizeRight: return .frameResize(position: .leading, directions: [.inward])
-        case .resizeUp: return .frameResize(position: .bottom, directions: [.inward])
-        case .resizeDown: return .frameResize(position: .top, directions: [.inward])
-        case .resizeUpDown: return .frameResize(position: .top)
-        case .resizeLeftRight: return .frameResize(position: .trailing)
-        }
-    }
-    #endif
+    // `var official: PointerStyle` was here for the macOS 15 SDK build.
+    // Removed for the Nix build (apple-sdk-14.4 from nixpkgs).
 }

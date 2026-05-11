@@ -410,14 +410,14 @@ final class BrowserPopupWindowController: NSObject, NSWindowDelegate {
 private class PopupUIDelegate: NSObject, WKUIDelegate {
     weak var controller: BrowserPopupWindowController?
 
-    func webViewDidClose(_ webView: WKWebView) {
+    @MainActor    func webViewDidClose(_ webView: WKWebView) {
         #if DEBUG
         cmuxDebugLog("popup.webViewDidClose")
         #endif
         controller?.closePopup()
     }
 
-    func webView(
+    @MainActor    func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
         for navigationAction: WKNavigationAction,
@@ -561,7 +561,7 @@ private class PopupNavigationDelegate: NSObject, WKNavigationDelegate {
     weak var controller: BrowserPopupWindowController?
     var downloadDelegate: WKDownloadDelegate?
 
-    func webView(
+    @MainActor    func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void

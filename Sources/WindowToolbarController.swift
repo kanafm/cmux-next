@@ -58,7 +58,7 @@ final class WindowToolbarController: NSObject, NSToolbarDelegate {
             queue: .main
         ) { [weak self] notification in
             guard let window = notification.object as? NSWindow else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.attach(to: window)
             }
         })

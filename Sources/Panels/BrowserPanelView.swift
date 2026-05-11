@@ -6259,6 +6259,7 @@ struct WebViewRepresentable: NSViewRepresentable {
         host.layoutSubtreeIfNeeded()
     }
 
+    @MainActor
     private func updateUsingLocalInlineHosting(_ nsView: NSView, context: Context, webView: WKWebView) -> Bool {
         guard let host = nsView as? HostContainerView else { return false }
         let slotView = host.ensureLocalInlineSlotView()
@@ -6450,6 +6451,7 @@ struct WebViewRepresentable: NSViewRepresentable {
         return !shouldPreserveExternalFullscreenHost
     }
 
+    @MainActor
     private func updateUsingWindowPortal(_ nsView: NSView, context: Context, webView: WKWebView) -> Bool {
         guard let host = nsView as? HostContainerView else { return false }
         host.prepareForWindowPortalHosting()
@@ -6718,6 +6720,7 @@ struct WebViewRepresentable: NSViewRepresentable {
         )
     }
 
+    @MainActor
     private static func applyFocus(
         panel: BrowserPanel,
         webView: WKWebView,
@@ -6782,6 +6785,7 @@ struct WebViewRepresentable: NSViewRepresentable {
         }
     }
 
+    @MainActor
     private static func applyWebViewFirstResponderPolicy(
         panel: BrowserPanel,
         webView: WKWebView,
@@ -6846,6 +6850,7 @@ struct WebViewRepresentable: NSViewRepresentable {
         coordinator.lastSynchronizedHostGeometryRevision = 0
     }
 
+    @MainActor
     private func currentPaneDropContext() -> BrowserPaneDropContext? {
         guard let app = AppDelegate.shared,
               let manager = app.tabManagerFor(tabId: panel.workspaceId),

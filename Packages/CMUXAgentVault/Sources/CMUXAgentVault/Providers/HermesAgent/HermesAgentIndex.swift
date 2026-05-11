@@ -1,5 +1,9 @@
 import Foundation
+#if CMUX_NIX_BUILD
+import CMUXSQLite
+#else
 import SQLite3
+#endif
 
 /// Indexed Hermes sessions do not carry cwd metadata and cannot be filtered by working directory.
 public struct HermesAgentIndexedSession: Equatable, Sendable {

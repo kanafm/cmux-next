@@ -1012,7 +1012,7 @@ private struct BrowserBluetoothAuthorizationState {
 }
 
 @MainActor
-private final class BrowserBluetoothAuthorizationGate: NSObject, @preconcurrency CBCentralManagerDelegate {
+private final class BrowserBluetoothAuthorizationGate: NSObject, CBCentralManagerDelegate {
     static let shared = BrowserBluetoothAuthorizationGate()
 
     private var centralManager: CBCentralManager?
@@ -1640,11 +1640,11 @@ private extension BrowserWebAuthnCoordinator {
             if !allowedCredentials.isEmpty {
                 securityKeyRequest.allowedCredentials = allowedCredentials
             }
-            if #available(macOS 14.5, *),
-               let appID = request.publicKey.extensions?.appid,
-               !appID.isEmpty {
-                securityKeyRequest.appID = appID
-            }
+            // Nix build (apple-sdk-14.4) doesn't expose
+            // ASAuthorizationSecurityKeyPublicKeyCredentialAssertionRequest.appID
+            // (added in macOS 14.5 SDK). Skip the assignment; the U2F-style
+            // appID extension is non-essential for first-cut WebAuthn support.
+            _ = request.publicKey.extensions?.appid
             securityKeyRequests.append(securityKeyRequest)
         }
 
@@ -1798,15 +1798,17 @@ private extension BrowserWebAuthnCoordinator {
     func securityKeyTransportValues(
         from registration: ASAuthorizationSecurityKeyPublicKeyCredentialRegistration
     ) -> [String] {
-        guard #available(macOS 14.5, *) else { return [] }
-        return registration.transports.map(\.rawValue)
+        // `registration.transports` is macOS 14.5+; apple-sdk-14.4 doesn't
+        // expose it. Stub to empty in the Nix build.
+        return []
     }
 
     func appIDExtensionResults(
         from assertion: ASAuthorizationSecurityKeyPublicKeyCredentialAssertion
     ) -> [String: Any] {
-        guard #available(macOS 14.5, *), assertion.appID else { return [:] }
-        return ["appid": true]
+        // `assertion.appID` is macOS 14.5+; apple-sdk-14.4 doesn't expose it.
+        // Stub to empty in the Nix build.
+        return [:]
     }
 
     func bridgeError(from error: Error) -> BrowserWebAuthnBridgeError {

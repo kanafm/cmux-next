@@ -1313,8 +1313,9 @@ class TabManager: ObservableObject {
         let cacheBySlug = workspacePullRequestRepoCacheBySlug
         let allowCachedResults = allowCachedResultsOverride
             ?? Self.workspacePullRequestRefreshAllowsRepoCache(reason: reason)
+        let capturedSeeds = candidateSeeds
         workspacePullRequestRefreshTask = Task.detached(priority: .utility) { [weak self] in
-            let candidateResolution = await Self.resolveWorkspacePullRequestCandidateSeeds(candidateSeeds)
+            let candidateResolution = await Self.resolveWorkspacePullRequestCandidateSeeds(capturedSeeds)
             guard !Task.isCancelled else { return }
             let repoResults = await Self.fetchWorkspacePullRequestRepoResults(
                 repoDirectoriesBySlug: candidateResolution.repoDirectoriesBySlug,

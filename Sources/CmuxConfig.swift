@@ -1136,7 +1136,7 @@ struct CmuxSurfaceTabBarButton: Codable, Sendable, Hashable, Identifiable {
             rawCommand != nil,
             rawAgent != nil,
             rawType != nil
-        ].filter(\.self).count
+        ].filter { $0 }.count
         if definedActionForms > 1 {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(

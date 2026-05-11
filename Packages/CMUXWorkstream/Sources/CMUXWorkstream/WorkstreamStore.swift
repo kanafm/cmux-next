@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -18,12 +18,16 @@ public let WorkstreamDefaultHistoryPageSize = 300
 /// the store's observation boundary and keeps SwiftUI view updates
 /// deterministic.
 ///
+// Converted from `@Observable` (Observation framework macro) to
+// `ObservableObject + @Published` to support the Nix build path: nixpkgs's
+// Swift 5.10.1 ships no macro plugins. The behavioral diff (objectWillChange
+// fires on any @Published change vs. @Observable's per-property tracking) is
+// negligible for this small state holder. See DIVERGENCE.md.
 @MainActor
-@Observable
-public final class WorkstreamStore {
-    public private(set) var items: [WorkstreamItem] = []
-    public private(set) var hasMorePersistedItems = false
-    public private(set) var isLoadingOlderItems = false
+public final class WorkstreamStore: ObservableObject {
+    @Published public private(set) var items: [WorkstreamItem] = []
+    @Published public private(set) var hasMorePersistedItems = false
+    @Published public private(set) var isLoadingOlderItems = false
 
     public var pending: [WorkstreamItem] {
         items.filter { $0.status.isPending }

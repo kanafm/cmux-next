@@ -65,7 +65,7 @@ struct SidebarBonsplitTabNewWorkspaceDropOverlay: NSViewRepresentable {
         }
     }
 
-    private func syncSidebarSelection(preferredSelectedTabId: UUID? = nil) {
+    @MainActor    private func syncSidebarSelection(preferredSelectedTabId: UUID? = nil) {
         let selectedId = preferredSelectedTabId ?? tabManager.selectedTabId
         if let selectedId {
             lastSidebarSelectionIndex = tabManager.tabs.firstIndex { $0.id == selectedId }
