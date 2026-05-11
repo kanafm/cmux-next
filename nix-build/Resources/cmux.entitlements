@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Ad-hoc-signed Nix build:
+         - Omit keychain-access-groups (they require a team prefix that we
+           don't have under ad-hoc signing).
+         - Allow loading unsigned/foreign-signed dylibs (the nix-store paths
+           for libsqlite3 and libz aren't co-signed by the cmux identity).
+         - Allow JIT / unsigned executable memory (Sparkle / WebKit need this).
+         - Allow DYLD_* env vars so nix's runtime can patch lookup paths
+           if needed.  -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+</dict>
+</plist>

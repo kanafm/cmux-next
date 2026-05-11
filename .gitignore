@@ -48,3 +48,6 @@ tests/visual_report.html
 # Local scratch (screenshots, etc.)
 tmp/
 tmp-*/
+
+# Locally assembled .app from nix-build/scripts/assemble-app.sh
+/cmux.app/

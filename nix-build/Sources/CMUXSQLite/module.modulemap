@@ -1,0 +1,5 @@
+module CMUXSQLite [system] {
+    header "CMUXSQLite.h"
+    link "sqlite3"
+    export *
+}
