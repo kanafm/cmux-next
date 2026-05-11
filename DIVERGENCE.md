@@ -111,6 +111,21 @@ The same redirect applies to `libsqlite3.dylib` (nix-store -> `/usr/lib/libsqlit
 
 ## How to maintain this fork against upstream
 
+### Sync strategy: merge, not rebase
+
+`nix-build/scripts/sync-and-validate.sh` merges `origin/main` (upstream) into local `main` rather than rebasing the fork's commits on top. This preserves the SHAs and committer dates of fork commits across syncs, which matters because GitHub's "committed N ago" display reads the committer date and rebase resets it every run. Trade-off: a merge commit appears on `main` for each upstream advance, so history is no longer linear.
+
+To inspect the fork-only view:
+
+```bash
+git log origin/main..HEAD --first-parent --oneline   # fork commits + merges, no upstream noise
+git diff origin/main...HEAD                          # cumulative diff vs upstream
+```
+
+Pushes to `kanafm/main` are fast-forward (no `--force-with-lease`). If `kanafm/main` advances externally between fetch and push, the push fails non-fast-forward; re-run the script and the reconcile-with-`kanafm/main` block at the top of each sync phase will fast-forward local first, then re-merge upstream, then push.
+
+### Watching for upstream changes
+
 Most upstream merges flow through cleanly. Watch out for:
 
 - New `@Observable` usages in cmux Sources/: convert to `ObservableObject + @Published` or wait for nixpkgs to gain Swift macro support.

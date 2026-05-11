@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Pull latest from upstream, apply our fork's patches on top, validate via
+# Pull latest from upstream, merge into our fork's main, validate via
 # validate-build.sh, and push to kanafm/main when green. Optionally chains
 # into publish-release.sh to upload a DMG to GitHub Releases.
+#
+# Strategy: merge, not rebase. Rebasing fork commits onto upstream every run
+# resets every commit's committer date (which GitHub reads for its
+# "committed N ago" display) and rewrites every SHA. Merge preserves both,
+# at the cost of a merge commit per upstream advance.
 #
 # Run this manually from the repo root once per day (or before each push).
 # Designed to avoid the cost of a GitHub Actions macOS runner while keeping
@@ -15,7 +20,7 @@
 # Exit codes:
 #   0   green, pushed (or pushed nothing if no diff)
 #   1   pre-flight failed (dirty tree, missing tooling)
-#   2   rebase conflict or kanafm/main divergence
+#   2   merge conflict or kanafm/main divergence
 #   3   swift build failed
 #   4   bundle assembly or codesign failed
 #   5   stale /nix/store dylib reference in cmux binary
@@ -112,17 +117,16 @@ if git -C vendor/bonsplit show-ref --verify --quiet refs/remotes/kanafm/main; th
     fi
 fi
 
-if ! git -C vendor/bonsplit rebase origin/main; then
-    fail "bonsplit rebase onto origin/main produced conflicts. Resolve them:"
+if ! git -C vendor/bonsplit merge --no-edit origin/main; then
+    fail "bonsplit merge of origin/main produced conflicts. Resolve them:"
     git -C vendor/bonsplit status --short
-    git -C vendor/bonsplit rebase --abort
-    git -C vendor/bonsplit checkout "$BONSPLIT_START_SHA"
+    git -C vendor/bonsplit merge --abort
     exit 2
 fi
 
 BONSPLIT_NEW_SHA="$(git -C vendor/bonsplit rev-parse HEAD)"
 if [[ "$BONSPLIT_NEW_SHA" != "$BONSPLIT_START_SHA" ]]; then
-    log "Bonsplit rebased to new HEAD $BONSPLIT_NEW_SHA"
+    log "Bonsplit merged upstream into HEAD $BONSPLIT_NEW_SHA"
 fi
 
 # -------------------- Phase 3: cmux sync --------------------
@@ -154,18 +158,17 @@ if git show-ref --verify --quiet refs/remotes/kanafm/main; then
     fi
 fi
 
-if ! git rebase origin/main; then
-    fail "cmux rebase onto origin/main produced conflicts. Resolve them:"
+if ! git merge --no-edit origin/main; then
+    fail "cmux merge of origin/main produced conflicts. Resolve them:"
     git status --short
-    git rebase --abort
-    git checkout "$CMUX_START_SHA"
+    git merge --abort
     git -C vendor/bonsplit checkout "$BONSPLIT_START_SHA"
     exit 2
 fi
 
 CMUX_NEW_SHA="$(git rev-parse HEAD)"
 if [[ "$CMUX_NEW_SHA" != "$CMUX_START_SHA" ]]; then
-    log "Cmux rebased to new HEAD $CMUX_NEW_SHA"
+    log "Cmux merged upstream into HEAD $CMUX_NEW_SHA"
 fi
 
 # If bonsplit advanced, the parent repo now has a submodule pointer diff in
@@ -175,13 +178,13 @@ fi
 if [[ -n "$(git status --porcelain --untracked-files=no vendor/bonsplit)" ]]; then
     log "Bumping bonsplit submodule pointer in cmux"
     git add vendor/bonsplit
-    git -c user.name=kanafm -c user.email=kanafm@users.noreply.github.com \
-        commit -m "chore: bump bonsplit submodule pointer after upstream rebase"
+    git -c user.name=kanafm -c user.email=rekanacoding@gmail.com \
+        commit -m "chore: bump bonsplit submodule pointer after upstream merge"
 fi
 
 # Compute push-needed by comparing local HEAD to kanafm/main, not by
-# checking whether the rebase moved HEAD. This covers the case where the
-# user made a local commit but upstream had nothing new: rebase is a no-op,
+# checking whether the merge moved HEAD. This covers the case where the
+# user made a local commit but upstream had nothing new: merge is a no-op,
 # but local is still ahead of kanafm/main and needs to be pushed.
 BONSPLIT_PUSH_NEEDED=0
 if git -C vendor/bonsplit show-ref --verify --quiet refs/remotes/kanafm/main \
@@ -208,19 +211,19 @@ echo
 # SHA not yet present on the bonsplit remote.
 if [[ "$BONSPLIT_PUSH_NEEDED" -eq 1 ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        echo "Would push: git -C vendor/bonsplit push --force-with-lease kanafm main"
+        echo "Would push: git -C vendor/bonsplit push kanafm main"
     else
         log "Pushing vendor/bonsplit to kanafm/main"
-        git -C vendor/bonsplit push --force-with-lease kanafm main
+        git -C vendor/bonsplit push kanafm main
     fi
 fi
 
 if [[ "$CMUX_PUSH_NEEDED" -eq 1 ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        echo "Would push: git push --force-with-lease kanafm main"
+        echo "Would push: git push kanafm main"
     else
         log "Pushing cmux to kanafm/main"
-        git push --force-with-lease kanafm main
+        git push kanafm main
     fi
 elif [[ "$BONSPLIT_PUSH_NEEDED" -eq 0 ]]; then
     echo "No changes to push to kanafm/main."
