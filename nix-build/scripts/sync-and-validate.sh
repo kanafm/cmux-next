@@ -1,31 +1,34 @@
 #!/usr/bin/env bash
-# Pre-push validation: pull latest from upstream into our fork, apply our
-# patches on top, build the whole pipeline end to end, smoke-test the .app,
-# and report whether it's safe to push to kanafm/cmux-next and kanafm/bonsplit.
+# Pull latest from upstream, apply our fork's patches on top, validate via
+# validate-build.sh, and push to kanafm/main when green. Optionally chains
+# into publish-release.sh to upload a DMG to GitHub Releases.
 #
-# Run this manually from the repo root before each `git push`. Designed to
-# avoid the cost of a GitHub Actions macOS runner while keeping the same
-# safety net. No auto-push: the script prints the exact push commands at
-# the end so you can review and run them yourself.
+# Run this manually from the repo root once per day (or before each push).
+# Designed to avoid the cost of a GitHub Actions macOS runner while keeping
+# the same safety net.
+#
+# Usage:
+#   ./nix-build/scripts/sync-and-validate.sh              # sync, validate, push
+#   ./nix-build/scripts/sync-and-validate.sh --dry-run    # sync, validate, skip push
+#   ./nix-build/scripts/sync-and-validate.sh --release    # sync, validate, push, DMG upload
 #
 # Exit codes:
-#   0   green, safe to push
-#   2   rebase conflict (resolve, then rerun)
+#   0   green, pushed (or pushed nothing if no diff)
+#   1   pre-flight failed (dirty tree, missing tooling)
+#   2   rebase conflict or kanafm/main divergence
 #   3   swift build failed
-#   4   bundle assembly failed
+#   4   bundle assembly or codesign failed
 #   5   stale /nix/store dylib reference in cmux binary
 #   6   launch smoke test failed
-#   1   other (uncategorized) error
+#   7   build-host path leaked into binary
 
 set -euo pipefail
 
-# Resolve repo root from script location.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# Auto-enter nix develop if not already inside it. Use a marker env var so
-# the re-exec doesn't recurse.
+# Auto-enter nix develop if not already inside it.
 if [[ "${CMUX_VALIDATE_INSIDE_NIX:-0}" != "1" ]]; then
     if ! command -v nix >/dev/null 2>&1; then
         echo "ERROR: nix is not on PATH. Install Nix and re-run." >&2
@@ -33,6 +36,16 @@ if [[ "${CMUX_VALIDATE_INSIDE_NIX:-0}" != "1" ]]; then
     fi
     exec nix develop --command env CMUX_VALIDATE_INSIDE_NIX=1 bash "$0" "$@"
 fi
+
+DRY_RUN=0
+DO_RELEASE=0
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run|-n) DRY_RUN=1 ;;
+        --release|-r) DO_RELEASE=1 ;;
+        *) echo "warn: unknown arg: $arg" >&2 ;;
+    esac
+done
 
 log() { printf '\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m   warn: %s\033[0m\n' "$*" >&2; }
@@ -110,10 +123,6 @@ fi
 BONSPLIT_NEW_SHA="$(git -C vendor/bonsplit rev-parse HEAD)"
 if [[ "$BONSPLIT_NEW_SHA" != "$BONSPLIT_START_SHA" ]]; then
     log "Bonsplit rebased to new HEAD $BONSPLIT_NEW_SHA"
-    BONSPLIT_PUSH_NEEDED=1
-else
-    echo "    bonsplit already up to date"
-    BONSPLIT_PUSH_NEEDED=0
 fi
 
 # -------------------- Phase 3: cmux sync --------------------
@@ -157,110 +166,74 @@ fi
 CMUX_NEW_SHA="$(git rev-parse HEAD)"
 if [[ "$CMUX_NEW_SHA" != "$CMUX_START_SHA" ]]; then
     log "Cmux rebased to new HEAD $CMUX_NEW_SHA"
+fi
+
+# If bonsplit advanced, the parent repo now has a submodule pointer diff in
+# its working tree. Commit it before validating so the build runs against
+# the final intended history (and so validate-build's clean-tree pre-flight
+# passes).
+if [[ -n "$(git status --porcelain --untracked-files=no vendor/bonsplit)" ]]; then
+    log "Bumping bonsplit submodule pointer in cmux"
+    git add vendor/bonsplit
+    git -c user.name=kanafm -c user.email=kanafm@users.noreply.github.com \
+        commit -m "chore: bump bonsplit submodule pointer after upstream rebase"
+fi
+
+# Compute push-needed by comparing local HEAD to kanafm/main, not by
+# checking whether the rebase moved HEAD. This covers the case where the
+# user made a local commit but upstream had nothing new: rebase is a no-op,
+# but local is still ahead of kanafm/main and needs to be pushed.
+BONSPLIT_PUSH_NEEDED=0
+if git -C vendor/bonsplit show-ref --verify --quiet refs/remotes/kanafm/main \
+   && [[ "$(git -C vendor/bonsplit rev-parse HEAD)" != "$(git -C vendor/bonsplit rev-parse kanafm/main)" ]]; then
+    BONSPLIT_PUSH_NEEDED=1
+fi
+CMUX_PUSH_NEEDED=0
+if git show-ref --verify --quiet refs/remotes/kanafm/main \
+   && [[ "$(git rev-parse HEAD)" != "$(git rev-parse kanafm/main)" ]]; then
     CMUX_PUSH_NEEDED=1
-else
-    echo "    cmux already up to date"
-    CMUX_PUSH_NEEDED=0
 fi
 
-# If bonsplit advanced, the parent repo now has a submodule pointer diff.
-# Stage it but do not commit; the user decides whether to amend or add a
-# new chore commit.
-if [[ "$BONSPLIT_PUSH_NEEDED" -eq 1 ]]; then
-    log "Bonsplit pointer in cmux needs bumping ($(git submodule status vendor/bonsplit))"
-fi
+# -------------------- Phase 4: validate --------------------
+"$SCRIPT_DIR/validate-build.sh"
 
-# -------------------- Phase 4: build --------------------
-log "Building cmux (swift build -c release)"
-rm -rf .build
-# nixpkgs swift emits a spurious 'error: unexpected binary framework' during
-# manifest parsing (pkg-config for sqlite3 isn't found) but the build itself
-# completes and produces a working binary. Trust the produced artifact, not
-# the swift exit code: success = "Build complete!" in the log AND the binary
-# exists on disk.
-set +e
-MACOSX_DEPLOYMENT_TARGET=14.0 swift build -c release 2>&1 | tee /tmp/cmux-validate-build.log | tail -30
-set -e
-if ! grep -q "Build complete!" /tmp/cmux-validate-build.log; then
-    fail "swift build did not complete. Full log: /tmp/cmux-validate-build.log"
-    exit 3
-fi
-if [[ ! -x .build/arm64-apple-macosx/release/cmux ]]; then
-    fail "swift build reported completion but .build/arm64-apple-macosx/release/cmux is missing"
-    exit 3
-fi
-
-# -------------------- Phase 5: GhosttyKit + assemble --------------------
-log "Ensuring GhosttyKit.xcframework"
-if ! ./scripts/ensure-ghosttykit.sh 2>&1 | tail -10; then
-    fail "ensure-ghosttykit.sh failed"
-    exit 4
-fi
-
-log "Assembling cmux.app"
-rm -rf cmux.app
-if ! ./nix-build/scripts/assemble-app.sh 2>&1 | tail -10; then
-    fail "assemble-app.sh failed"
-    exit 4
-fi
-
-# -------------------- Phase 6: verify --------------------
-log "Verifying codesign"
-if ! codesign --verify --deep --strict cmux.app; then
-    fail "codesign verification failed"
-    exit 4
-fi
-
-log "Checking for stale /nix/store dylib references"
-STALE="$(otool -L cmux.app/Contents/MacOS/cmux | awk '/\/nix\/store\// {print $1}' || true)"
-if [[ -n "$STALE" ]]; then
-    fail "cmux binary still references /nix/store dylibs that would SIGKILL at launch:"
-    echo "$STALE" | sed 's/^/    /'
-    echo
-    fail "Update nix-build/scripts/assemble-app.sh's install_name_tool block to redirect these."
-    exit 5
-fi
-
-# -------------------- Phase 7: launch smoke --------------------
-log "Launch smoke test (5s)"
-open cmux.app
-sleep 5
-if pgrep -f 'cmux.app/Contents/MacOS/cmux' >/dev/null; then
-    LAUNCH_OK=1
-    pkill -f 'cmux.app/Contents/MacOS/cmux' || true
-    sleep 1
-else
-    LAUNCH_OK=0
-fi
-
-if [[ "$LAUNCH_OK" -ne 1 ]]; then
-    fail "cmux.app exited within 5s. Check ~/Library/Logs/DiagnosticReports/cmux-*.ips"
-    exit 6
-fi
-
-# -------------------- Phase 8: report --------------------
-APP_SIZE="$(du -sh cmux.app | cut -f1)"
-
-printf '\n\033[1;32m========================================\033[0m\n'
-printf '\033[1;32m  VALIDATION GREEN  %s safe to push\033[0m\n' "(cmux.app: $APP_SIZE)"
-printf '\033[1;32m========================================\033[0m\n\n'
-
-echo "Cmux:     $CMUX_START_SHA -> $CMUX_NEW_SHA"
-echo "Bonsplit: $BONSPLIT_START_SHA -> $BONSPLIT_NEW_SHA"
+# -------------------- Phase 5: push --------------------
+echo
+echo "Cmux:     $CMUX_START_SHA -> $(git rev-parse HEAD)"
+echo "Bonsplit: $BONSPLIT_START_SHA -> $(git -C vendor/bonsplit rev-parse HEAD)"
 echo
 
+# Push bonsplit BEFORE cmux. cmux's submodule pointer references a bonsplit
+# SHA, so pushing cmux first leaves a window where the pointer references a
+# SHA not yet present on the bonsplit remote.
 if [[ "$BONSPLIT_PUSH_NEEDED" -eq 1 ]]; then
-    echo "Bonsplit changed. Push it first, then bump cmux's submodule pointer:"
-    echo "    git -C vendor/bonsplit push kanafm main"
-    echo "    git add vendor/bonsplit"
-    echo "    git -c user.name=kanafm -c user.email=kanafm@users.noreply.github.com commit -m 'chore: bump bonsplit submodule'"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "Would push: git -C vendor/bonsplit push --force-with-lease kanafm main"
+    else
+        log "Pushing vendor/bonsplit to kanafm/main"
+        git -C vendor/bonsplit push --force-with-lease kanafm main
+    fi
 fi
 
-if [[ "$CMUX_PUSH_NEEDED" -eq 1 || "$BONSPLIT_PUSH_NEEDED" -eq 1 ]]; then
-    echo "Then push cmux:"
-    echo "    git push kanafm main"
-else
-    echo "No new upstream commits; nothing to push."
+if [[ "$CMUX_PUSH_NEEDED" -eq 1 ]]; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "Would push: git push --force-with-lease kanafm main"
+    else
+        log "Pushing cmux to kanafm/main"
+        git push --force-with-lease kanafm main
+    fi
+elif [[ "$BONSPLIT_PUSH_NEEDED" -eq 0 ]]; then
+    echo "No changes to push to kanafm/main."
+fi
+
+# -------------------- Phase 6: optional release --------------------
+if [[ "$DO_RELEASE" -eq 1 ]]; then
+    log "Publishing DMG to kanafm/cmux-next Releases"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        "$SCRIPT_DIR/publish-release.sh" --dry-run
+    else
+        "$SCRIPT_DIR/publish-release.sh"
+    fi
 fi
 
 exit 0

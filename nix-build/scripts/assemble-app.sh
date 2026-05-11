@@ -34,11 +34,16 @@ cp "$RESOURCES_DIR/Info.plist"      "$OUT_APP/Contents/Info.plist"
 cp "$RESOURCES_DIR/AppIcon.icns"    "$OUT_APP/Contents/Resources/AppIcon.icns"
 cp -R "$RESOURCES_DIR/AgentIcons"   "$OUT_APP/Contents/Resources/AgentIcons"
 
-# 3. Stamp git short SHA into Info.plist (matches upstream's build phase)
-COMMIT="$(git -C "$REPO_ROOT" rev-parse --short=9 HEAD 2>/dev/null || true)"
-if [[ -n "$COMMIT" ]]; then
-    /usr/libexec/PlistBuddy -c "Add :CMUXCommit string $COMMIT" "$OUT_APP/Contents/Info.plist" 2>/dev/null \
-        || /usr/libexec/PlistBuddy -c "Set :CMUXCommit $COMMIT" "$OUT_APP/Contents/Info.plist"
+# 3. Stamp git short SHA into Info.plist (matches upstream's build phase).
+#    Skipped by default (CMUX_SCRUB=1) so the assembled bundle doesn't link
+#    to a specific fork commit. Set CMUX_SCRUB=0 to keep the legacy behavior
+#    for local debugging.
+if [[ "${CMUX_SCRUB:-1}" != "1" ]]; then
+    COMMIT="$(git -C "$REPO_ROOT" rev-parse --short=9 HEAD 2>/dev/null || true)"
+    if [[ -n "$COMMIT" ]]; then
+        /usr/libexec/PlistBuddy -c "Add :CMUXCommit string $COMMIT" "$OUT_APP/Contents/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CMUXCommit $COMMIT" "$OUT_APP/Contents/Info.plist"
+    fi
 fi
 
 # 4. Sparkle is stubbed (nix-build/Sources/Sparkle). No real framework to embed.
@@ -119,6 +124,18 @@ fi
 SP_SRC="$(nix_dylib_path libswift_StringProcessing.dylib)"
 if [[ -n "$SP_SRC" && "$SP_SRC" == /nix/store/* ]]; then
     /usr/bin/install_name_tool -change "$SP_SRC" /usr/lib/swift/libswift_StringProcessing.dylib "$OUT_APP/Contents/MacOS/cmux"
+fi
+
+# 6b. Scrub build-host paths from the binary.
+#
+# `swift build -c release` embeds DWARF debug-info sections containing
+# absolute source paths like /Users/<user>/Desktop/.../cmux/Sources/...
+# Those leak the build host's username if the bundle is distributed.
+# `strip -S` removes the DWARF section; `strip -x` drops local symbols
+# (which can also embed path-derived names). Together they leave a
+# functioning release binary with no path leaks visible to `strings`.
+if [[ "${CMUX_SCRUB:-1}" == "1" ]]; then
+    /usr/bin/strip -Sx "$OUT_APP/Contents/MacOS/cmux"
 fi
 
 # 7. Strip any existing signatures, then re-sign inside-out.
