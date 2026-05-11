@@ -408,8 +408,12 @@ extension FileDropOverlayView {
     }
 
     func paneDropTargetForTextDrop(at windowPoint: NSPoint) -> (any FileDropPaneTarget)? {
-        if let textView = editableTextViewUnderPoint(windowPoint),
-           !(textView is SavingTextView) {
+        // Non-cmux editable text fields (settings, search bars) should keep
+        // their native text drop behavior. The file-preview Monaco editor is
+        // a WKWebView (not an NSTextView), so it never matches here and
+        // falls through to the pane-level handler, which then calls
+        // FilePreviewPanel.handleDroppedFileURLsAsText.
+        if editableTextViewUnderPoint(windowPoint) != nil {
             return nil
         }
         return paneDropTargetUnderPoint(windowPoint)

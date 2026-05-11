@@ -534,7 +534,7 @@ final class FilePreviewPanel: Panel, ObservableObject {
     private var textLoadGeneration = 0
     private var saveGeneration = 0
     private var activeSaveGeneration: Int?
-    private weak var textView: NSTextView?
+    private weak var monacoEditor: MonacoEditorHostView?
     private let focusCoordinator: FilePreviewFocusCoordinator
 
     // File watcher used only in .markdownPreview mode so disk edits
@@ -575,7 +575,7 @@ final class FilePreviewPanel: Panel, ObservableObject {
     }
 
     func close() {
-        textView = nil
+        monacoEditor = nil
         focusCoordinator.unregisterAll()
         stopMarkdownFileWatcher()
     }
@@ -591,18 +591,17 @@ final class FilePreviewPanel: Panel, ObservableObject {
         focusFlashToken += 1
     }
 
-    func attachTextView(_ textView: NSTextView) {
-        self.textView = textView
-        focusCoordinator.register(root: textView, primaryResponder: textView, intent: .textEditor)
+    func attachMonacoEditor(_ editor: MonacoEditorHostView) {
+        self.monacoEditor = editor
     }
 
     func handleDroppedFileURLsAsText(_ urls: [URL]) -> Bool {
-        guard previewMode == .text, let textView else { return false }
+        guard previewMode == .text, let editor = monacoEditor else { return false }
         let text = TerminalImageTransferPlanner.insertedText(forFileURLs: urls)
         guard !text.isEmpty else { return false }
-        textView.window?.makeFirstResponder(textView)
-        textView.insertText(text, replacementRange: textView.selectedRange())
-        updateTextContent(textView.string)
+        editor.window?.makeFirstResponder(editor.webView)
+        editor.insertTextAtCursor(text)
+        // The Monaco 'change' handler fires panel.updateTextContent for us.
         return true
     }
 
@@ -844,7 +843,10 @@ final class FilePreviewPanel: Panel, ObservableObject {
     func saveTextContent() -> Task<Void, Never>? {
         guard previewMode == .text else { return nil }
         guard !isSaving else { return nil }
-        let currentContent = textView?.string ?? textContent
+        // textContent reflects the latest Monaco state via the bridge's
+        // 100ms-debounced 'change' message, so a Cmd+S within ~100ms of
+        // the last keystroke may save a one-keystroke-stale snapshot.
+        let currentContent = textContent
         guard currentContent != originalTextContent else {
             textContent = currentContent
             isDirty = false
@@ -1000,7 +1002,7 @@ struct FilePreviewPanelView: View {
         } else {
             switch panel.previewMode {
             case .text:
-                FilePreviewTextEditor(
+                FilePreviewMonacoEditor(
                     panel: panel,
                     isVisibleInUI: isVisibleInUI,
                     themeBackgroundColor: themeBackgroundColor,

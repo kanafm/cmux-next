@@ -163,6 +163,18 @@
             focus: function () {
                 editor.focus();
             },
+            insertAtCursor: function (payload) {
+                var text = (payload && typeof payload.text === "string") ? payload.text : "";
+                if (!text) return;
+                var selection = editor.getSelection();
+                if (!selection) return;
+                editor.executeEdits("cmux-insert", [{
+                    range: selection,
+                    text: text,
+                    forceMoveMarkers: true,
+                }]);
+                editor.focus();
+            },
         };
 
         post("ready", {});
