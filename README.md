@@ -131,6 +131,61 @@ The Nix path drops auto-update (Sparkle), error reporting (Sentry), telemetry (P
 
 The upstream xcodeproj path (`./scripts/reload.sh`) is preserved and unchanged. Use it if you have Xcode.
 
+### Fork maintenance workflow (kanafm/cmux-next)
+
+Three scripts orchestrate the lifecycle of the Nix build path:
+
+| Script | Purpose | Cadence |
+|---|---|---|
+| `nix-build/scripts/validate-build.sh` | Build, assemble, and verify `cmux.app` from the current local tree (no git ops) | Per code change |
+| `nix-build/scripts/sync-and-validate.sh` | Rebase on `manaflow-ai/main`, reconcile with `kanafm/main`, validate, push | Daily |
+| `nix-build/scripts/publish-release.sh` | Package `cmux.app` as a DMG and upload to GitHub Releases | Weekly |
+
+#### Per-change push
+
+After editing Swift sources or build scripts:
+
+```bash
+./nix-build/scripts/validate-build.sh && git push kanafm main
+```
+
+For pure markdown or doc edits, skip validate and just `git push kanafm main`.
+
+#### Daily upstream sync
+
+```bash
+./nix-build/scripts/sync-and-validate.sh
+```
+
+This fetches `manaflow-ai/cmux` and `manaflow-ai/bonsplit`, rebases the fork commits on top, reconciles with the fork remote (fast-forwards if `kanafm/main` was advanced externally, bails if diverged), bumps the bonsplit submodule pointer if needed, runs `validate-build.sh`, and pushes to `kanafm/main` if green. Pass `--dry-run` to skip the push.
+
+A rebase conflict exits 2 and leaves the repos in a state you can resolve manually.
+
+#### Weekly release
+
+```bash
+./nix-build/scripts/sync-and-validate.sh --release
+```
+
+Same as the daily sync, plus packages `cmux.app` as `cmux-macos.dmg` and uploads it to [kanafm/cmux-next Releases](https://github.com/kanafm/cmux-next/releases) as a tagged prerelease (`nix-YYYY.MM.DD-<sha>`). If you already validated today and just want the release step:
+
+```bash
+./nix-build/scripts/publish-release.sh
+```
+
+#### Identifying-info scrub
+
+`assemble-app.sh` strips DWARF debug paths from the binary (`strip -Sx`) and omits the `CMUXCommit` Info.plist key by default, so the assembled `cmux.app` does not leak the build host's username or fork commit SHA. Set `CMUX_SCRUB=0` to keep the legacy commit-stamping behavior for local debugging.
+
+Known minor leaks: the DMG embeds the creator's UID on filesystem entries (commonly `501`, not personally identifying on its own). The GitHub Release upload is performed by your `gh` CLI identity.
+
+#### Distribution notes
+
+- Ad-hoc signed, **not notarized**. First-time users get Gatekeeper friction: right-click then Open, or `xattr -dr com.apple.quarantine cmux.app`.
+- Apple Silicon only (`arm64-apple-macosx14.0`).
+- macOS 14+ required.
+- Releases marked `--prerelease` so the GitHub `latest` API points at upstream's signed releases, not this fork.
+
 ## Why cmux?
 
 I run a lot of Claude Code and Codex sessions in parallel. I was using Ghostty with a bunch of split panes, and relying on native macOS notifications to know when an agent needed me. But Claude Code's notification body is always just "Claude is waiting for your input" with no context, and with enough tabs open I couldn't even read the titles anymore.
