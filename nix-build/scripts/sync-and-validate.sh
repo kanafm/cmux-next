@@ -77,6 +77,28 @@ git -C vendor/bonsplit fetch --quiet kanafm 2>/dev/null || warn "kanafm remote n
 BONSPLIT_UPSTREAM_BEFORE="$(git -C vendor/bonsplit rev-parse origin/main)"
 echo "    upstream main: $BONSPLIT_UPSTREAM_BEFORE"
 
+# Reconcile local with kanafm/main first (in case it was advanced externally,
+# e.g. via the GitHub UI "Sync fork" button). Three cases:
+#   - kanafm/main matches local       : nothing to do
+#   - kanafm/main is ahead of local   : fast-forward local to kanafm/main
+#   - kanafm/main has diverged        : bail; user must resolve manually
+if git -C vendor/bonsplit show-ref --verify --quiet refs/remotes/kanafm/main; then
+    BONSPLIT_FORK_SHA="$(git -C vendor/bonsplit rev-parse kanafm/main)"
+    if [[ "$BONSPLIT_FORK_SHA" != "$BONSPLIT_START_SHA" ]]; then
+        if git -C vendor/bonsplit merge-base --is-ancestor "$BONSPLIT_START_SHA" "$BONSPLIT_FORK_SHA"; then
+            log "bonsplit kanafm/main advanced; fast-forwarding local to $BONSPLIT_FORK_SHA"
+            git -C vendor/bonsplit merge --ff-only kanafm/main
+        elif git -C vendor/bonsplit merge-base --is-ancestor "$BONSPLIT_FORK_SHA" "$BONSPLIT_START_SHA"; then
+            echo "    local bonsplit is ahead of kanafm/main; nothing to fast-forward"
+        else
+            fail "bonsplit local main and kanafm/main have diverged. Resolve manually:"
+            echo "    local      : $BONSPLIT_START_SHA"
+            echo "    kanafm/main: $BONSPLIT_FORK_SHA"
+            exit 2
+        fi
+    fi
+fi
+
 if ! git -C vendor/bonsplit rebase origin/main; then
     fail "bonsplit rebase onto origin/main produced conflicts. Resolve them:"
     git -C vendor/bonsplit status --short
@@ -102,6 +124,26 @@ git fetch --quiet kanafm 2>/dev/null || warn "kanafm remote not configured on cm
 
 CMUX_UPSTREAM_BEFORE="$(git rev-parse origin/main)"
 echo "    upstream main: $CMUX_UPSTREAM_BEFORE"
+
+# Same reconciliation logic as bonsplit: fast-forward from kanafm/main if it
+# advanced externally; bail on divergence.
+if git show-ref --verify --quiet refs/remotes/kanafm/main; then
+    CMUX_FORK_SHA="$(git rev-parse kanafm/main)"
+    if [[ "$CMUX_FORK_SHA" != "$CMUX_START_SHA" ]]; then
+        if git merge-base --is-ancestor "$CMUX_START_SHA" "$CMUX_FORK_SHA"; then
+            log "cmux kanafm/main advanced; fast-forwarding local to $CMUX_FORK_SHA"
+            git merge --ff-only kanafm/main
+        elif git merge-base --is-ancestor "$CMUX_FORK_SHA" "$CMUX_START_SHA"; then
+            echo "    local cmux is ahead of kanafm/main; nothing to fast-forward"
+        else
+            fail "cmux local main and kanafm/main have diverged. Resolve manually:"
+            echo "    local      : $CMUX_START_SHA"
+            echo "    kanafm/main: $CMUX_FORK_SHA"
+            git -C vendor/bonsplit checkout "$BONSPLIT_START_SHA"
+            exit 2
+        fi
+    fi
+fi
 
 if ! git rebase origin/main; then
     fail "cmux rebase onto origin/main produced conflicts. Resolve them:"
