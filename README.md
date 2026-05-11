@@ -116,6 +116,21 @@ brew upgrade --cask cmux
 
 On first launch, macOS may ask you to confirm opening an app from an identified developer. Click **Open** to proceed.
 
+### Building with Nix (no Xcode required)
+
+This fork ([`kanafm/cmux-next`](https://github.com/kanafm/cmux-next)) ships a Nix flake that builds a runnable `cmux.app` on macOS without installing Xcode.app or Xcode Command Line Tools. The flake provides Swift, the macOS SDK, sqlite, zlib, and zig from nixpkgs.
+
+```bash
+nix develop
+swift build -c release
+./nix-build/scripts/assemble-app.sh
+open cmux.app
+```
+
+The Nix path drops auto-update (Sparkle), error reporting (Sentry), telemetry (PostHog), Japanese localization, and the dynamic dock badge plugin. Everything else works. See [DIVERGENCE.md](./DIVERGENCE.md) for the full list of intentional differences from upstream and the rationale behind each one.
+
+The upstream xcodeproj path (`./scripts/reload.sh`) is preserved and unchanged. Use it if you have Xcode.
+
 ## Why cmux?
 
 I run a lot of Claude Code and Codex sessions in parallel. I was using Ghostty with a bunch of split panes, and relying on native macOS notifications to know when an agent needed me. But Claude Code's notification body is always just "Claude is waiting for your input" with no context, and with enough tabs open I couldn't even read the titles anymore.
