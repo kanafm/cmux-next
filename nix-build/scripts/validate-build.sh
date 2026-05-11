@@ -49,23 +49,34 @@ fi
 
 # -------------------- Phase 2: build --------------------
 log "Building cmux (swift build -c release)"
-rm -rf .build
+
+# Build outputs go to a neutral scratch path so the SwiftPM-generated
+# `resource_bundle_accessor.swift` files do not embed the build host's
+# $HOME in the binary. The .build symlink keeps the repo root looking
+# normal for editor tooling while the actual outputs live elsewhere.
+SCRATCH_PATH="/private/tmp/cmux-build"
+rm -rf "$SCRATCH_PATH" .build
+mkdir -p "$SCRATCH_PATH"
+ln -sf "$SCRATCH_PATH" .build
+
 # nixpkgs swift emits a spurious 'error: unexpected binary framework' during
 # manifest parsing (pkg-config for sqlite3 isn't found) but the build itself
 # completes and produces a working binary. Trust the produced artifact, not
 # the swift exit code: success = "Build complete!" in the log AND the binary
 # exists on disk.
 set +e
-MACOSX_DEPLOYMENT_TARGET=14.0 swift build -c release 2>&1 | tee /tmp/cmux-validate-build.log | tail -30
+MACOSX_DEPLOYMENT_TARGET=14.0 swift build -c release --scratch-path "$SCRATCH_PATH" 2>&1 | tee /tmp/cmux-validate-build.log | tail -30
 set -e
 if ! grep -q "Build complete!" /tmp/cmux-validate-build.log; then
     fail "swift build did not complete. Full log: /tmp/cmux-validate-build.log"
     exit 3
 fi
-if [[ ! -x .build/arm64-apple-macosx/release/cmux ]]; then
-    fail "swift build reported completion but .build/arm64-apple-macosx/release/cmux is missing"
+BIN_DIR="$SCRATCH_PATH/arm64-apple-macosx/release"
+if [[ ! -x "$BIN_DIR/cmux" ]]; then
+    fail "swift build reported completion but $BIN_DIR/cmux is missing"
     exit 3
 fi
+export BIN_DIR
 
 # -------------------- Phase 3: GhosttyKit + assemble --------------------
 log "Ensuring GhosttyKit.xcframework"
@@ -99,11 +110,18 @@ if [[ -n "$STALE" ]]; then
 fi
 
 log "Checking for build-host path leaks in binary"
-LEAK="$(/usr/bin/strings cmux.app/Contents/MacOS/cmux | grep -E '/Users/[^/]+/' | head -3 || true)"
+# Match /Users/<name>/ where <name> starts with a letter and does not contain
+# $ or {. This catches real usernames like /Users/kana/ while ignoring shell
+# script literals like /Users/$cmux_dock_user/ that are runtime templates,
+# not build-host paths.
+LEAK="$(/usr/bin/strings cmux.app/Contents/MacOS/cmux \
+    | grep -E '/Users/[a-zA-Z][^/$\{]*/' \
+    | grep -v '/Users/Shared/' \
+    | head -5 || true)"
 if [[ -n "$LEAK" ]]; then
     fail "cmux binary still contains build-host paths after scrub:"
     echo "$LEAK" | sed 's/^/    /'
-    fail "Check that 'strip -Sx' ran in assemble-app.sh (CMUX_SCRUB=1)."
+    fail "Check that --scratch-path and -file-compilation-dir are applied."
     exit 7
 fi
 

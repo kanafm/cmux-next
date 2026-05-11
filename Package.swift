@@ -172,6 +172,9 @@ let package = Package(
                     // 5.10.1 default. Force minimal strict concurrency to
                     // match upstream behavior.
                     "-strict-concurrency=minimal",
+                    // Remap `#file` literals so a distributed binary does
+                    // not leak the build host's $HOME path.
+                    "-file-compilation-dir", "/build/cmux",
                 ]),
             ],
             linkerSettings: [

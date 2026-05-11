@@ -5897,10 +5897,16 @@ final class WorkspaceRemoteSessionController {
 
     private static func findRepoRoot() -> URL? {
         var candidates: [URL] = []
+        #if !CMUX_NIX_BUILD
+        // #filePath is not remapped by -file-compilation-dir, so it would
+        // leak the build host's absolute source path into distributed
+        // binaries. The env-var and bundle-path fallbacks below cover the
+        // production case anyway.
         let compileTimeRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent() // Sources
             .deletingLastPathComponent() // repo root
         candidates.append(compileTimeRoot)
+        #endif
         let environment = ProcessInfo.processInfo.environment
         if let envRoot = environment["CMUX_REMOTE_DAEMON_SOURCE_ROOT"],
            !envRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
