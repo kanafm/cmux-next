@@ -114,7 +114,7 @@ log "Checking for build-host path leaks in binary"
 # $ or {. This catches real usernames like /Users/kana/ while ignoring shell
 # script literals like /Users/$cmux_dock_user/ that are runtime templates,
 # not build-host paths.
-LEAK="$(/usr/bin/strings cmux.app/Contents/MacOS/cmux \
+LEAK="$(strings cmux.app/Contents/MacOS/cmux \
     | grep -E '/Users/[a-zA-Z][^/$\{]*/' \
     | grep -v '/Users/Shared/' \
     | head -5 || true)"
