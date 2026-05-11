@@ -73,8 +73,8 @@ final class MonacoEditorHostView: NSView {
             }
             return true
         }
-        // Intercept font-size shortcuts before Monaco's own bindings.
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Intercept font-size shortcuts before Monaco's own bindings.
         if flags == .command, let chars = event.charactersIgnoringModifiers {
             switch chars {
             case "=", "+":
@@ -89,6 +89,18 @@ final class MonacoEditorHostView: NSView {
             default:
                 break
             }
+        }
+        // Cmd+Shift+P and Cmd+P would otherwise reach Monaco's quickCommand
+        // / quickOpen widgets. In our CSP + no-worker WebView those widgets
+        // can lock the main thread on first activation (observed: cmux hung
+        // until force-quit). Return false WITHOUT calling super so the
+        // WKWebView subview is skipped; the event then walks up the
+        // responder chain to cmux's app menu (Cmd+Shift+P opens cmux's
+        // command palette). The JS-side addKeybindingRule null-outs in
+        // bootstrap.js are defense-in-depth but cannot be trusted alone.
+        if (flags == [.command, .shift] || flags == .command),
+           event.charactersIgnoringModifiers?.lowercased() == "p" {
+            return false
         }
         return super.performKeyEquivalent(with: event)
     }
