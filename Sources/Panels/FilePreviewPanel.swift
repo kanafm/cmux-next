@@ -316,10 +316,6 @@ enum FilePreviewKindResolver {
 
     private static func initialResolution(for url: URL) -> Resolution {
         let ext = url.pathExtension.lowercased()
-        if let type = UTType(filenameExtension: ext),
-           let mediaMode = mediaMode(for: type) {
-            return .resolved(mediaMode)
-        }
 
         if ext == "plist" {
             return .needsSniff
@@ -330,8 +326,17 @@ enum FilePreviewKindResolver {
             return .resolved(.markdownPreview)
         }
 
+        // Text-extension allowlist takes precedence over UTType media
+        // classification. macOS maps `.ts` to public.mpeg-2-transport-stream
+        // (TypeScript collides with MPEG Transport Stream); other source
+        // extensions may have similar UTI collisions in the future.
         if knownTextFile(url: url, includeResourceContentType: false) {
             return .resolved(.text)
+        }
+
+        if let type = UTType(filenameExtension: ext),
+           let mediaMode = mediaMode(for: type) {
+            return .resolved(mediaMode)
         }
 
         return .needsSniff
@@ -343,19 +348,22 @@ enum FilePreviewKindResolver {
             return .resolved(.quickLook)
         }
 
-        for type in contentTypes(for: url) {
-            if let mediaMode = mediaMode(for: type) {
-                return .resolved(mediaMode)
-            }
-        }
-
         if CmdClickMarkdownRouteSettings.isMarkdownPath(url.path),
            CmdClickMarkdownRouteSettings.isEnabled() {
             return .resolved(.markdownPreview)
         }
 
+        // See initialResolution: text-extension allowlist wins over UTI
+        // media classification so `.ts` files open as TypeScript, not as
+        // MPEG Transport Stream.
         if knownTextFile(url: url, includeResourceContentType: true) {
             return .resolved(.text)
+        }
+
+        for type in contentTypes(for: url) {
+            if let mediaMode = mediaMode(for: type) {
+                return .resolved(mediaMode)
+            }
         }
 
         return .needsSniff
