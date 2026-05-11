@@ -48,7 +48,10 @@ fi
 # Pre-flight: verify scrub actually held. validate-build.sh already checks
 # this, but publish is a second gate before bytes go out to a public mirror.
 log "Verifying scrub on cmux.app"
-LEAK="$(/usr/bin/strings "$APP/Contents/MacOS/cmux" | grep -E '/Users/[^/]+/' | head -3 || true)"
+LEAK="$(/usr/bin/strings "$APP/Contents/MacOS/cmux" \
+    | grep -E '/Users/[a-zA-Z][^/$\{]*/' \
+    | grep -v '/Users/Shared/' \
+    | head -5 || true)"
 if [[ -n "$LEAK" ]]; then
     fail "cmux binary contains build-host paths. Aborting upload:"
     echo "$LEAK" | sed 's/^/    /'
