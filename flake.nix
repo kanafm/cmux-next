@@ -10,6 +10,17 @@
     flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
+
+        # monaco-editor npm tarball, pinned and content-addressed. The dev
+        # shell exposes the resulting /nix/store path via MONACO_TARBALL so
+        # nix-build/scripts/fetch-monaco.sh can extract it without curling.
+        # Keep version + hash in sync with the MONACO_VERSION / MONACO_SHA256
+        # constants at the top of fetch-monaco.sh.
+        monacoVersion = "0.55.1";
+        monacoTarball = pkgs.fetchurl {
+          url = "https://registry.npmjs.org/monaco-editor/-/monaco-editor-${monacoVersion}.tgz";
+          hash = "sha256-7sNyH7ax3FoL0ac+OKXrXQw3ka9oT30lce+5CthjSHE=";
+        };
       in
       {
         devShells.default = pkgs.mkShell {
@@ -37,6 +48,10 @@
             # which makes @Observable etc. unavailable. Force the real
             # deployment target through the wrapper.
             export MACOSX_DEPLOYMENT_TARGET=14.0
+
+            # Hand fetch-monaco.sh the nix-store tarball path so it skips
+            # the curl from registry.npmjs.org. Hash is pinned in flake.lock.
+            export MONACO_TARBALL=${monacoTarball}
 
             echo "-- cmux dev environment (Nix) --"
             echo "SDKROOT=$SDKROOT"

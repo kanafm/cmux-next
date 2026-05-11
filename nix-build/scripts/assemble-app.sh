@@ -97,6 +97,15 @@ if [[ -d "$UPSTREAM_RESOURCES/markdown-renderer" ]]; then
     cp -R "$UPSTREAM_RESOURCES/markdown-renderer/." "$OUT_APP/Contents/Resources/markdown-renderer/"
 fi
 
+# Monaco editor (host page + vendored AMD bundle) for FilePreviewMonacoEditor.
+# The vs/ tree is fetched on demand by fetch-monaco.sh and gitignored. The
+# fetch is idempotent: re-runs hit the .version stamp and exit instantly.
+"$REPO_ROOT/nix-build/scripts/fetch-monaco.sh"
+if [[ -d "$UPSTREAM_RESOURCES/monaco-editor" ]]; then
+    mkdir -p "$OUT_APP/Contents/Resources/monaco-editor"
+    cp -R "$UPSTREAM_RESOURCES/monaco-editor/." "$OUT_APP/Contents/Resources/monaco-editor/"
+fi
+
 # 6. Rewrite nix-store dylib references to the SYSTEM paths shipped with
 #    macOS (/usr/lib/libsqlite3.dylib, /usr/lib/libz.1.dylib). The nix-store
 #    originals have no code signature, which macOS rejects at runtime even

@@ -18,6 +18,9 @@ fi
 
 "$SCRIPT_DIR/ensure-ghosttykit.sh"
 
+echo "==> Fetching monaco-editor..."
+"$PROJECT_DIR/nix-build/scripts/fetch-monaco.sh"
+
 echo "==> Setup complete!"
 echo ""
 echo "You can now build and run the app:"

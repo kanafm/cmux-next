@@ -51,3 +51,8 @@ tmp-*/
 
 # Locally assembled .app from nix-build/scripts/assemble-app.sh
 /cmux.app/
+
+# monaco-editor: fetched at build time by nix-build/scripts/fetch-monaco.sh
+Resources/monaco-editor/vs/
+Resources/monaco-editor/LICENSE
+Resources/monaco-editor/.version

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'; worker-src 'none';">
+<title>cmux editor</title>
+<style>
+html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: transparent; overflow: hidden; }
+#root { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// Run language services on the main thread; matches CSP worker-src 'none'.
+self.MonacoEnvironment = { getWorker: function () { return null; } };
+</script>
+<script src="vs/loader.js"></script>
+<script src="bootstrap.js"></script>
+</body>
+</html>
