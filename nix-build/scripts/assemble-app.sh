@@ -91,6 +91,12 @@ if [[ -f "$GHOSTTY_ZSH_SRC" ]]; then
     cp "$GHOSTTY_ZSH_SRC" "$SHELL_INTEGRATION_DEST/ghostty-integration.zsh"
 fi
 
+# Bundled markdown renderer (HTML template + marked.min.js) for MarkdownPreviewView.
+if [[ -d "$UPSTREAM_RESOURCES/markdown-renderer" ]]; then
+    mkdir -p "$OUT_APP/Contents/Resources/markdown-renderer"
+    cp -R "$UPSTREAM_RESOURCES/markdown-renderer/." "$OUT_APP/Contents/Resources/markdown-renderer/"
+fi
+
 # 6. Rewrite nix-store dylib references to the SYSTEM paths shipped with
 #    macOS (/usr/lib/libsqlite3.dylib, /usr/lib/libz.1.dylib). The nix-store
 #    originals have no code signature, which macOS rejects at runtime even

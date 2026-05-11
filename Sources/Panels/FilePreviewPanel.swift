@@ -232,6 +232,7 @@ final class FilePreviewDragPasteboardWriter: NSObject, NSPasteboardWriting {
 
 enum FilePreviewMode: Equatable {
     case text
+    case markdownPreview
     case pdf
     case image
     case media
@@ -300,6 +301,8 @@ enum FilePreviewKindResolver {
         switch mode {
         case .text:
             return "doc.text"
+        case .markdownPreview:
+            return "doc.richtext"
         case .pdf:
             return "doc.richtext"
         case .image:
@@ -322,6 +325,11 @@ enum FilePreviewKindResolver {
             return .needsSniff
         }
 
+        if CmdClickMarkdownRouteSettings.isMarkdownPath(url.path),
+           CmdClickMarkdownRouteSettings.isEnabled() {
+            return .resolved(.markdownPreview)
+        }
+
         if knownTextFile(url: url, includeResourceContentType: false) {
             return .resolved(.text)
         }
@@ -339,6 +347,11 @@ enum FilePreviewKindResolver {
             if let mediaMode = mediaMode(for: type) {
                 return .resolved(mediaMode)
             }
+        }
+
+        if CmdClickMarkdownRouteSettings.isMarkdownPath(url.path),
+           CmdClickMarkdownRouteSettings.isEnabled() {
+            return .resolved(.markdownPreview)
         }
 
         if knownTextFile(url: url, includeResourceContentType: true) {
@@ -524,6 +537,14 @@ final class FilePreviewPanel: Panel, ObservableObject {
     private weak var textView: NSTextView?
     private let focusCoordinator: FilePreviewFocusCoordinator
 
+    // File watcher used only in .markdownPreview mode so disk edits
+    // (formatters, agent runs, git operations) reload the rendered view
+    // automatically. Editor (.text) mode intentionally has no watcher
+    // because reloading would clobber the user's in-progress edits.
+    private nonisolated(unsafe) var markdownWatchSource: DispatchSourceFileSystemObject?
+    private var markdownWatchDescriptor: Int32 = -1
+    private let markdownWatchQueue = DispatchQueue(label: "com.cmux.file-preview-markdown-watch", qos: .utility)
+
     var fileURL: URL {
         URL(fileURLWithPath: filePath)
     }
@@ -556,6 +577,12 @@ final class FilePreviewPanel: Panel, ObservableObject {
     func close() {
         textView = nil
         focusCoordinator.unregisterAll()
+        stopMarkdownFileWatcher()
+    }
+
+    deinit {
+        // DispatchSource cancel is safe from any thread.
+        markdownWatchSource?.cancel()
     }
 
     func triggerFlash(reason: WorkspaceAttentionFlashReason) {
@@ -661,11 +688,90 @@ final class FilePreviewPanel: Panel, ObservableObject {
     }
 
     private func prepareContentForPreviewMode() {
-        if previewMode == .text {
+        switch previewMode {
+        case .text:
+            stopMarkdownFileWatcher()
             loadTextContent(replacingDirtyContent: false)
-        } else {
+        case .markdownPreview:
+            // Preview is read-only; safe to always replace local state.
+            loadTextContent(replacingDirtyContent: true)
+            startMarkdownFileWatcher()
+        case .pdf, .image, .media, .quickLook:
+            stopMarkdownFileWatcher()
             isFileUnavailable = !FileManager.default.fileExists(atPath: filePath)
         }
+    }
+
+    // MARK: - Markdown preview file watcher
+
+    private func startMarkdownFileWatcher() {
+        stopMarkdownFileWatcher()
+        let fd = open(filePath, O_EVTONLY)
+        guard fd >= 0 else { return }
+        markdownWatchDescriptor = fd
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename, .extend],
+            queue: markdownWatchQueue
+        )
+
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let flags = source.data
+            DispatchQueue.main.async {
+                guard self.previewMode == .markdownPreview else { return }
+                if flags.contains(.delete) || flags.contains(.rename) {
+                    // Inode is stale after delete/rename; reattach after
+                    // checking whether the path is back (atomic save).
+                    self.stopMarkdownFileWatcher()
+                    self.loadTextContent(replacingDirtyContent: true)
+                    if FileManager.default.fileExists(atPath: self.filePath) {
+                        self.startMarkdownFileWatcher()
+                    }
+                } else {
+                    self.loadTextContent(replacingDirtyContent: true)
+                }
+            }
+        }
+
+        source.setCancelHandler {
+            Darwin.close(fd)
+        }
+
+        source.resume()
+        markdownWatchSource = source
+    }
+
+    private func stopMarkdownFileWatcher() {
+        if let source = markdownWatchSource {
+            source.cancel()
+            markdownWatchSource = nil
+        }
+        markdownWatchDescriptor = -1
+    }
+
+    /// Toggle the panel between rendered markdown preview and the text
+    /// editor view. No-op when called on a panel whose current mode is
+    /// neither of those (e.g. PDF, image, media).
+    func toggleMarkdownPreviewMode() {
+        switch previewMode {
+        case .markdownPreview:
+            applyResolvedPreviewMode(.text)
+        case .text:
+            guard CmdClickMarkdownRouteSettings.isMarkdownPath(filePath) else { return }
+            applyResolvedPreviewMode(.markdownPreview)
+        case .pdf, .image, .media, .quickLook:
+            return
+        }
+    }
+
+    /// True when the toggle button should be shown in the header (path
+    /// has a markdown extension and current mode is rendered preview or
+    /// text editor).
+    var supportsMarkdownPreviewToggle: Bool {
+        guard CmdClickMarkdownRouteSettings.isMarkdownPath(filePath) else { return false }
+        return previewMode == .markdownPreview || previewMode == .text
     }
 
     private func resolvePreviewModeIfNeeded(for fileURL: URL) {
@@ -773,6 +879,9 @@ final class FilePreviewPanel: Panel, ObservableObject {
         switch mode {
         case .text:
             return .textEditor
+        case .markdownPreview:
+            // Read-only viewer; reuse quickLook intent (no caret first responder).
+            return .quickLook
         case .pdf:
             return .pdfCanvas
         case .image:
@@ -843,6 +952,20 @@ struct FilePreviewPanelView: View {
                 .truncationMode(.middle)
                 .textSelection(.enabled)
             Spacer(minLength: 8)
+            if panel.supportsMarkdownPreviewToggle {
+                Button {
+                    panel.toggleMarkdownPreviewMode()
+                } label: {
+                    Image(systemName: panel.previewMode == .markdownPreview ? "doc.text" : "doc.richtext")
+                }
+                .buttonStyle(.borderless)
+                .help(panel.previewMode == .markdownPreview
+                    ? String(localized: "filePreview.showSource", defaultValue: "Show Source")
+                    : String(localized: "filePreview.showPreview", defaultValue: "Show Preview"))
+                .accessibilityLabel(panel.previewMode == .markdownPreview
+                    ? String(localized: "filePreview.showSource", defaultValue: "Show Source")
+                    : String(localized: "filePreview.showPreview", defaultValue: "Show Preview"))
+            }
             if panel.previewMode == .text {
                 Button {
                     panel.loadTextContent()
@@ -882,6 +1005,15 @@ struct FilePreviewPanelView: View {
                     isVisibleInUI: isVisibleInUI,
                     themeBackgroundColor: themeBackgroundColor,
                     themeForegroundColor: themeForegroundColor
+                )
+            case .markdownPreview:
+                MarkdownPreviewView(
+                    content: panel.textContent,
+                    baseDirectory: panel.filePath.isEmpty
+                        ? nil
+                        : URL(fileURLWithPath: panel.filePath).deletingLastPathComponent(),
+                    sourceWorkspaceId: panel.workspaceId,
+                    sourcePanelId: panel.id
                 )
             case .pdf:
                 FilePreviewPDFView(panel: panel, isVisibleInUI: isVisibleInUI)

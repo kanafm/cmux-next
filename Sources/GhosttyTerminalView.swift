@@ -3524,7 +3524,7 @@ class GhosttyApp {
     }
 
     @MainActor
-    private static func openEmbeddedBrowserLink(
+    static func openEmbeddedBrowserLink(
         url: URL,
         sourceWorkspaceId: UUID,
         sourcePanelId: UUID,

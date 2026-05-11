@@ -117,6 +117,7 @@ Most upstream merges flow through cleanly. Watch out for:
 - New `import SQLite3`: wrap in the `#if CMUX_NIX_BUILD` swap.
 - New `XCRemoteSwiftPackageReference` entries in `GhosttyTabs.xcodeproj`: mirror into `Package.swift`. If the new dep ships a dylib/xcframework, expect signing surgery.
 - New Xcode-only assets in `Assets.xcassets`: re-run `./nix-build/scripts/extract-agent-icons.sh` and `./nix-build/scripts/bake-icon.sh`.
+- New non-asset bundle resources under `Resources/` (HTML/JS/CSS templates, loose plug-in scripts, etc.) need an explicit `cp` in `nix-build/scripts/assemble-app.sh`. The Xcode build's "Copy Bundle Resources" phase picks them up automatically; the Nix script uses an allowlist, so a forgotten cp produces a `.app` whose code looks for a missing bundle resource at runtime.
 - New `nonisolated` type-level declarations or other Swift 6 syntax in upstream Sources/: strip or wait for nixpkgs Swift 6.
 
 When nixpkgs eventually ships Swift 6 on Darwin:

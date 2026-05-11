@@ -5,6 +5,8 @@ extension FilePreviewMode {
         switch self {
         case .text:
             return "text"
+        case .markdownPreview:
+            return "markdownPreview"
         case .pdf:
             return "pdf"
         case .image:

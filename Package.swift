@@ -40,7 +40,11 @@ let package = Package(
         // PostHog is stubbed out — see nix-build/Sources/PostHog/PostHog.swift.
         // The real posthog-ios vendors PHPLCrashReporter (Obj-C/C++) which doesn't
         // compile under nixpkgs cc-wrapper + apple-sdk-14.4 (Foundation.h PCH issue).
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1"),
+
+        // swift-markdown-ui removed in favor of a WKWebView + bundled
+        // marked.min.js renderer at Resources/markdown-renderer/. See
+        // Sources/Panels/MarkdownPreviewView.swift. Drops three transitive
+        // pins (swift-markdown-ui, swift-cmark, NetworkImage).
 
         // swift-syntax dep removed (was for the CMUXObservation macro attempt;
         // nixpkgs swift doesn't support macros as a language feature, so the
@@ -144,7 +148,6 @@ let package = Package(
                 "Sparkle",  // local stub target
                 "Sentry",   // local stub target
                 "PostHog",  // local stub target
-                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
                 .product(name: "Bonsplit", package: "bonsplit"),
                 .product(name: "StackAuth", package: "stack-auth-swift-sdk-prerelease"),
                 "GhosttyKit",
