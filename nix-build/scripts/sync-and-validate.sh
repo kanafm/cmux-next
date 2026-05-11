@@ -131,12 +131,20 @@ fi
 # -------------------- Phase 4: build --------------------
 log "Building cmux (swift build -c release)"
 rm -rf .build
-if ! MACOSX_DEPLOYMENT_TARGET=14.0 swift build -c release 2>&1 | tee /tmp/cmux-validate-build.log | tail -30; then
-    fail "swift build failed. Full log: /tmp/cmux-validate-build.log"
+# nixpkgs swift emits a spurious 'error: unexpected binary framework' during
+# manifest parsing (pkg-config for sqlite3 isn't found) but the build itself
+# completes and produces a working binary. Trust the produced artifact, not
+# the swift exit code: success = "Build complete!" in the log AND the binary
+# exists on disk.
+set +e
+MACOSX_DEPLOYMENT_TARGET=14.0 swift build -c release 2>&1 | tee /tmp/cmux-validate-build.log | tail -30
+set -e
+if ! grep -q "Build complete!" /tmp/cmux-validate-build.log; then
+    fail "swift build did not complete. Full log: /tmp/cmux-validate-build.log"
     exit 3
 fi
 if [[ ! -x .build/arm64-apple-macosx/release/cmux ]]; then
-    fail "swift build completed but .build/arm64-apple-macosx/release/cmux is missing"
+    fail "swift build reported completion but .build/arm64-apple-macosx/release/cmux is missing"
     exit 3
 fi
 
