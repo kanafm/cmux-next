@@ -2,17 +2,17 @@ import Darwin
 import Foundation
 import os
 
-nonisolated struct CmuxTopProcessCPUSample: Sendable {
+struct CmuxTopProcessCPUSample: Sendable {
     let totalTimeTicks: UInt64
     let sampledAtNanoseconds: UInt64
 }
 
-private nonisolated struct CmuxTopProcessCPUTrackerState: Sendable {
+private struct CmuxTopProcessCPUTrackerState: Sendable {
     var samples: [CmuxTopProcessScopeCacheKey: CmuxTopProcessCPUSample] = [:]
     var latestPrunedAtNanoseconds: UInt64 = 0
 }
 
-private nonisolated final class CmuxTopProcessCPUTracker: @unchecked Sendable {
+private final class CmuxTopProcessCPUTracker: @unchecked Sendable {
     private let state = OSAllocatedUnfairLock(initialState: CmuxTopProcessCPUTrackerState())
 
     // Snapshot capture is synchronous for the v2 socket path, so an actor would
@@ -55,8 +55,8 @@ private nonisolated final class CmuxTopProcessCPUTracker: @unchecked Sendable {
     }
 }
 
-private nonisolated let cmuxTopProcessCPUTracker = CmuxTopProcessCPUTracker()
-private nonisolated let cmuxTopAbsoluteTimeNanosecondsRatio: Double? = {
+private let cmuxTopProcessCPUTracker = CmuxTopProcessCPUTracker()
+private let cmuxTopAbsoluteTimeNanosecondsRatio: Double? = {
     var info = mach_timebase_info_data_t()
     guard mach_timebase_info(&info) == KERN_SUCCESS, info.denom > 0 else {
         return nil
@@ -64,7 +64,7 @@ private nonisolated let cmuxTopAbsoluteTimeNanosecondsRatio: Double? = {
     return Double(info.numer) / Double(info.denom)
 }()
 
-nonisolated extension CmuxTopProcessSnapshot {
+extension CmuxTopProcessSnapshot {
     static func cpuSampleClockNanoseconds() -> UInt64 {
         clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
     }

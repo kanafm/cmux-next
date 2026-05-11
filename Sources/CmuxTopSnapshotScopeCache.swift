@@ -2,13 +2,13 @@ import Foundation
 import Darwin
 import os
 
-nonisolated struct CmuxTopProcessScopeCacheKey: Hashable {
+struct CmuxTopProcessScopeCacheKey: Hashable {
     let pid: Int
     let startSeconds: Int
     let startMicroseconds: Int
 }
 
-private nonisolated struct CmuxTopProcessScopeCacheValue {
+private struct CmuxTopProcessScopeCacheValue {
     let scope: CmuxTopProcessScope
 }
 
@@ -16,11 +16,11 @@ private nonisolated struct CmuxTopProcessScopeCacheValue {
 // both async task-manager sampling and sync v2 system.top socket handling. Keep
 // this tiny lock isolated to dictionary reads/writes; procargs/sysctl work must
 // happen outside the critical section.
-private nonisolated let cmuxTopScopeCache = OSAllocatedUnfairLock(
+private let cmuxTopScopeCache = OSAllocatedUnfairLock(
     initialState: [CmuxTopProcessScopeCacheKey: CmuxTopProcessScopeCacheValue]()
 )
 
-nonisolated extension CmuxTopProcessSnapshot {
+extension CmuxTopProcessSnapshot {
     static func scopeCacheKey(from kinfo: kinfo_proc) -> CmuxTopProcessScopeCacheKey {
         let startTime = kinfo.kp_proc.p_un.__p_starttime
         return CmuxTopProcessScopeCacheKey(

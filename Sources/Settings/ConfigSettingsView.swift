@@ -200,7 +200,7 @@ struct ConfigSettingsView: View {
         cmuxLastLoadedContents = latestCmuxContents
     }
 
-    private func reloadFromDisk() {
+    @MainActor    private func reloadFromDisk() {
         refreshSnapshots(preserveCmuxDraft: false)
         GhosttyApp.shared.reloadConfiguration(source: "settings.configWindow.reload")
         statusMessage = String(
@@ -210,7 +210,7 @@ struct ConfigSettingsView: View {
         statusIsError = false
     }
 
-    private func saveCmuxConfig() {
+    @MainActor    private func saveCmuxConfig() {
         let environment = ConfigSourceEnvironment.live()
 
         do {

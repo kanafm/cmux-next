@@ -54,6 +54,7 @@ final class CmuxSSHURLProcessLauncher {
             let output = outputCollector.finish()
             let processIdentifier = terminatedProcess.processIdentifier
             let terminationStatus = terminatedProcess.terminationStatus
+            let capturedWindow = preferredWindow
             Task { @MainActor in
                 Self.shared.processes.removeValue(forKey: processIdentifier)
                 guard terminationStatus != 0, !Self.shared.isShuttingDown else { return }
@@ -64,7 +65,7 @@ final class CmuxSSHURLProcessLauncher {
                 Self.shared.presentLaunchFailure(
                     summary: String(format: format, Int(terminationStatus)),
                     output: output,
-                    preferredWindow: preferredWindow
+                    preferredWindow: capturedWindow
                 )
             }
         }

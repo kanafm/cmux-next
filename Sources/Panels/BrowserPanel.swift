@@ -5,7 +5,11 @@ import AppKit
 import Bonsplit
 import Network
 import CFNetwork
+#if CMUX_NIX_BUILD
+import CMUXSQLite
+#else
 import SQLite3
+#endif
 import CryptoKit
 #if canImport(CommonCrypto)
 import CommonCrypto
@@ -3271,7 +3275,7 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // URL changes
         let urlObserver = webView.observe(\.url, options: [.new]) { [weak self] webView, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 self.currentURL = Self.remoteProxyDisplayURL(for: webView.url)
             }
@@ -3280,7 +3284,7 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // Title changes
         let titleObserver = webView.observe(\.title, options: [.new]) { [weak self] webView, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 // Keep showing the last non-empty title while the new navigation is loading.
                 // WebKit often clears title to nil/"" during reload/navigation, which causes
@@ -3300,7 +3304,7 @@ final class BrowserPanel: Panel, ObservableObject {
         // That skips favicon/loading-state cleanup and leaves stale icons visible.
         let loadingObserver = webView.observe(\.isLoading, options: [.new]) { [weak self] webView, change in
             let newValue = change.newValue ?? webView.isLoading
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 self.handleWebViewLoadingChanged(newValue)
             }
@@ -3309,7 +3313,7 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // Can go back
         let backObserver = webView.observe(\.canGoBack, options: [.new]) { [weak self] webView, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 self.nativeCanGoBack = webView.canGoBack
                 self.refreshNavigationAvailability()
@@ -3319,7 +3323,7 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // Can go forward
         let forwardObserver = webView.observe(\.canGoForward, options: [.new]) { [weak self] webView, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 self.nativeCanGoForward = webView.canGoForward
                 self.refreshNavigationAvailability()
@@ -3329,7 +3333,7 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // Progress
         let progressObserver = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] webView, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 self.estimatedProgress = webView.estimatedProgress
             }
@@ -3339,7 +3343,7 @@ final class BrowserPanel: Panel, ObservableObject {
         let fullscreenObserver = webView.observe(\.fullscreenState, options: [.initial, .new]) { [weak self] webView, _ in
             let isElementFullscreenActive = webView.cmuxIsElementFullscreenActiveOrTransitioning
             let fullscreenState = webView.fullscreenState
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isCurrentWebView(webView, instanceID: observedWebViewInstanceID) else { return }
                 self.isElementFullscreenActive = isElementFullscreenActive
                 BrowserWindowPortalRegistry.refresh(
@@ -9705,7 +9709,7 @@ final class BrowserDataImportCoordinator {
 #endif
 
     @MainActor
-    private final class ImportWizardWindowController: NSObject, @preconcurrency NSWindowDelegate {
+    private final class ImportWizardWindowController: NSObject, NSWindowDelegate {
         private final class FlippedDocumentView: NSView {
             override var isFlipped: Bool { true }
         }

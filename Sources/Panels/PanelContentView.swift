@@ -3,6 +3,7 @@ import Foundation
 import Bonsplit
 
 /// View that renders the appropriate panel view based on panel type
+@MainActor
 struct PanelContentView: View {
     let panel: any Panel
     let workspaceId: UUID

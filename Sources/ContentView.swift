@@ -1267,7 +1267,7 @@ struct ContentView: View {
     }
 
     static func tmuxWorkspacePaneExactRect(
-        for panel: Panel,
+        for panel: any Panel,
         in contentView: NSView
     ) -> CGRect? {
         let targetView: NSView?
@@ -10307,20 +10307,24 @@ enum ShortcutHintModifierActivation {
     }
 }
 
+// Converted from `@Observable` to `ObservableObject + @Published` to support
+// the Nix build path (nixpkgs Swift 5.10.1 has no macro plugins). See
+// DIVERGENCE.md. The `@ObservationIgnored` markers are no-ops in this shape
+// (ObservableObject doesn't auto-track non-@Published properties) but
+// left commented for the upstream merge audit trail.
 @MainActor
-@Observable
-final class WindowScopedShortcutHintModifierMonitor {
-    private(set) var isModifierPressed = false
+final class WindowScopedShortcutHintModifierMonitor: ObservableObject {
+    @Published private(set) var isModifierPressed = false
 
     private let activation: ShortcutHintModifierActivation
     private let allowsHintsForWindow: (NSWindow) -> Bool
-    @ObservationIgnored private weak var hostWindow: NSWindow?
-    @ObservationIgnored private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
-    @ObservationIgnored private var hostWindowDidResignKeyObserver: NSObjectProtocol?
-    @ObservationIgnored private var flagsMonitor: Any?
-    @ObservationIgnored private var keyDownMonitor: Any?
-    @ObservationIgnored private var appResignObserver: NSObjectProtocol?
-    @ObservationIgnored private var pendingShowWorkItem: DispatchWorkItem?
+    private weak var hostWindow: NSWindow?
+    private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
+    private var hostWindowDidResignKeyObserver: NSObjectProtocol?
+    private var flagsMonitor: Any?
+    private var keyDownMonitor: Any?
+    private var appResignObserver: NSObjectProtocol?
+    private var pendingShowWorkItem: DispatchWorkItem?
 
     init(
         activation: ShortcutHintModifierActivation = .commandOrControl,

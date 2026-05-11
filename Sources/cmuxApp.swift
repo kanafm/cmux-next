@@ -2889,7 +2889,7 @@ private final class MenuBarExtraDebugWindowController: NSWindowController, NSWin
         fatalError("init(coder:) has not been implemented")
     }
 
-    func show() {
+    @MainActor    func show() {
         window?.center()
         window?.makeKeyAndOrderFront(nil)
     }
@@ -3024,7 +3024,7 @@ private struct MenuBarExtraDebugView: View {
         }
     }
 
-    private func applyLiveUpdate() {
+    @MainActor    private func applyLiveUpdate() {
         AppDelegate.shared?.refreshMenuBarExtraForDebug()
     }
 }
@@ -3507,7 +3507,7 @@ private struct TabBarBackdropLabView: View {
         )
     }
 
-    private func labSlider(
+    @MainActor    private func labSlider(
         title: String,
         value: Binding<Double>,
         range: ClosedRange<Double>,
@@ -3529,6 +3529,7 @@ private struct TabBarBackdropLabSample: View {
     let sidebarWidth: CGFloat
     @State private var controller: BonsplitController
 
+    @MainActor
     init(variant: TabBarBackdropLabVariant, sidebarWidth: CGFloat) {
         self.variant = variant
         self.sidebarWidth = sidebarWidth
@@ -3599,7 +3600,7 @@ private struct TabBarBackdropLabSample: View {
         }
     }
 
-    private func applyVariant() {
+    @MainActor    private func applyVariant() {
         controller.configuration = Self.makeConfiguration(for: variant)
     }
 
@@ -3641,7 +3642,7 @@ private struct TabBarBackdropLabSample: View {
         )
     }
 
-    private static func makeController(for variant: TabBarBackdropLabVariant) -> BonsplitController {
+    @MainActor    private static func makeController(for variant: TabBarBackdropLabVariant) -> BonsplitController {
         let controller = BonsplitController(configuration: makeConfiguration(for: variant))
 
         let titles = [
@@ -4126,7 +4127,7 @@ private struct StartupAppearanceDebugView: View {
         )
     }
 
-    private func applyPreview() {
+    @MainActor    private func applyPreview() {
         applyAppearance(selectedAppearance)
         GhosttyStartupAppearancePreviewState.profile = selectedProfile
         GhosttyConfig.invalidateLoadCache()
@@ -4138,7 +4139,7 @@ private struct StartupAppearanceDebugView: View {
         lastAppliedAppearance = selectedAppearance
     }
 
-    private func restoreRealStartup() {
+    @MainActor    private func restoreRealStartup() {
         selectedProfile = .realUserConfig
         selectedAppearance = .stored
         applyAppearance(.stored)

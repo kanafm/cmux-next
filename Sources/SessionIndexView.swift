@@ -1,7 +1,11 @@
 import AppKit
 import Bonsplit
 import CMUXAgentVault
+#if CMUX_NIX_BUILD
+import CMUXSQLite
+#else
 import SQLite3
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 

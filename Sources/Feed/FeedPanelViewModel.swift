@@ -1,6 +1,6 @@
 import CMUXWorkstream
+import Combine
 import Foundation
-import Observation
 import SwiftUI
 
 /// Bridges the `@Observable` WorkstreamStore to a Combine `@Published`
@@ -12,6 +12,10 @@ final class FeedPanelViewModel: ObservableObject {
     @Published private(set) var hasMorePersistedItems = false
     @Published private(set) var isLoadingOlderItems = false
     private var storeInstalledObserver: NSObjectProtocol?
+    // Replaces upstream's `withObservationTracking { ... } onChange: { ... }`
+    // — see DIVERGENCE.md (WorkstreamStore converted from @Observable to
+    // ObservableObject to support the Nix build path).
+    private var storeChangeCancellable: AnyCancellable?
 
     init() {
         storeInstalledObserver = NotificationCenter.default.addObserver(
@@ -19,7 +23,7 @@ final class FeedPanelViewModel: ObservableObject {
             object: FeedCoordinator.shared,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.arm()
             }
         }
@@ -34,15 +38,23 @@ final class FeedPanelViewModel: ObservableObject {
 
     private func arm() {
         guard let store = FeedCoordinator.shared.store else { return }
-        withObservationTracking {
-            items = store.items
-            hasMorePersistedItems = store.hasMorePersistedItems
-            isLoadingOlderItems = store.isLoadingOlderItems
-        } onChange: { [weak self] in
-            Task { @MainActor in
-                self?.arm()
+        refresh(from: store)
+        storeChangeCancellable = store.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                // ObservableObject fires objectWillChange BEFORE the mutation,
+                // so defer the read to the next runloop tick.
+                Task { @MainActor [weak self] in
+                    guard let self, let store = FeedCoordinator.shared.store else { return }
+                    self.refresh(from: store)
+                }
             }
-        }
+    }
+
+    private func refresh(from store: WorkstreamStore) {
+        items = store.items
+        hasMorePersistedItems = store.hasMorePersistedItems
+        isLoadingOlderItems = store.isLoadingOlderItems
     }
 
     nonisolated func loadOlderItems() {

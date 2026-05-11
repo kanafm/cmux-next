@@ -2,13 +2,13 @@ import AppKit
 
 /// Returns true for Unicode scalars that represent terminal control input rather
 /// than printable text.
-nonisolated func isControlCharacterScalar(_ scalar: UnicodeScalar) -> Bool {
+func isControlCharacterScalar(_ scalar: UnicodeScalar) -> Bool {
     scalar.value < 0x20 || scalar.value == 0x7F
 }
 
 /// Filters AppKit text fallback payloads down to printable text that should be
 /// forwarded as Ghostty key text.
-nonisolated func shouldSendText(_ text: String) -> Bool {
+func shouldSendText(_ text: String) -> Bool {
     guard !text.isEmpty else { return false }
     if text.count == 1, let scalar = text.unicodeScalars.first {
         return !isControlCharacterScalar(scalar)

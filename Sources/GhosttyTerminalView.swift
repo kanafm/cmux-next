@@ -2809,7 +2809,7 @@ class GhosttyApp {
         }
     }
 
-    func reloadConfiguration(
+    @MainActor    func reloadConfiguration(
         soft: Bool = false,
         source: String = "unspecified",
         reloadSettingsFromFile: Bool = true
@@ -2874,7 +2874,7 @@ class GhosttyApp {
         }
     }
 
-    func synchronizeThemeWithAppearance(_ appearance: NSAppearance?, source: String) {
+    @MainActor    func synchronizeThemeWithAppearance(_ appearance: NSAppearance?, source: String) {
         let currentColorScheme = GhosttyConfig.currentColorSchemePreference(
             appAppearance: appearance ?? NSApp?.effectiveAppearance
         )
@@ -13176,7 +13176,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         hostInLiveResize || windowInLiveResize || interactiveGeometryResizeActive
     }
 
-    private static func synchronizePortalGeometry(
+    @MainActor    private static func synchronizePortalGeometry(
         for host: HostContainerView,
         coordinator: Coordinator
     ) {

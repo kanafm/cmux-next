@@ -39,7 +39,9 @@ enum AppearanceSettings {
                     NSApplication.shared.appearance = appearance
                 },
                 synchronizeTerminalThemeWithAppearance: { appearance, source in
-                    GhosttyApp.shared.synchronizeThemeWithAppearance(appearance, source: source)
+                    MainActor.assumeIsolated {
+                        GhosttyApp.shared.synchronizeThemeWithAppearance(appearance, source: source)
+                    }
                 },
                 systemAppearance: {
                     AppearanceSettings.systemNSAppearance()
