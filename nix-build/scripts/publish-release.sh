@@ -22,6 +22,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# Auto-enter nix develop. The scrub check uses `strings` from nixpkgs binutils
+# instead of /usr/bin/strings (which is an Apple stub that requires Xcode CLT).
+if [[ "${CMUX_VALIDATE_INSIDE_NIX:-0}" != "1" ]]; then
+    if ! command -v nix >/dev/null 2>&1; then
+        echo "ERROR: nix is not on PATH. Install Nix and re-run." >&2
+        exit 1
+    fi
+    exec nix develop --command env CMUX_VALIDATE_INSIDE_NIX=1 bash "$0" "$@"
+fi
+
 log() { printf '\033[1;36m==> %s\033[0m\n' "$*"; }
 fail() { printf '\033[1;31m   FAIL: %s\033[0m\n' "$*" >&2; }
 
@@ -48,7 +58,7 @@ fi
 # Pre-flight: verify scrub actually held. validate-build.sh already checks
 # this, but publish is a second gate before bytes go out to a public mirror.
 log "Verifying scrub on cmux.app"
-LEAK="$(/usr/bin/strings "$APP/Contents/MacOS/cmux" \
+LEAK="$(strings "$APP/Contents/MacOS/cmux" \
     | grep -E '/Users/[a-zA-Z][^/$\{]*/' \
     | grep -v '/Users/Shared/' \
     | head -5 || true)"
