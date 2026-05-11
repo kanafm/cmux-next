@@ -72,7 +72,7 @@
             scrollBeyondLastLine: false,
             renderWhitespace: "selection",
             tabSize: 4,
-            wordWrap: "off",
+            wordWrap: "on",
             smoothScrolling: true,
         });
 
