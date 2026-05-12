@@ -4093,6 +4093,45 @@ class GhosttyApp {
                 // Fall through to the existing NSWorkspace path below.
             }
 
+            // Route file:// URLs (non-markdown, or markdown with the viewer disabled)
+            // into the in-app file preview tab.
+            if target.url.isFileURL,
+               fileURLHost == nil || fileURLHost?.isEmpty == true || fileURLHost == "localhost" {
+                let fileURL = target.url
+                let routed: Bool = performOnMain {
+                    let resolved = (fileURL.path as NSString).resolvingSymlinksInPath
+                    guard FileManager.default.isReadableFile(atPath: resolved),
+                          let attrs = try? FileManager.default.attributesOfItem(atPath: resolved),
+                          (attrs[.type] as? FileAttributeType) == .typeRegular,
+                          let termSurface = surfaceView.terminalSurface,
+                          let workspace = termSurface.owningWorkspace(),
+                          !workspace.isRemoteTerminalSurface(termSurface.id) else {
+                        return false
+                    }
+                    let preferredWorkspaceId = workspace.id
+                    let surfaceId = termSurface.id
+                    // Defer split creation — same lock-reentrancy constraint as the markdown
+                    // block above (see comments at lines 4038–4056).
+                    DispatchQueue.main.async {
+                        let resolvedWorkspace = AppDelegate.shared?.workspaceContainingPanel(
+                            panelId: surfaceId,
+                            preferredWorkspaceId: preferredWorkspaceId
+                        )?.workspace ?? workspace
+                        guard !resolvedWorkspace.isRemoteTerminalSurface(surfaceId) else {
+                            NSWorkspace.shared.open(fileURL)
+                            return
+                        }
+                        guard resolvedWorkspace.openOrFocusFilePreviewSplit(
+                            from: surfaceId,
+                            filePath: fileURL.path
+                        ) == nil else { return }
+                        NSWorkspace.shared.open(fileURL)
+                    }
+                    return true
+                }
+                if routed { return true }
+            }
+
             if !BrowserLinkOpenSettings.openTerminalLinksInCmuxBrowser() {
                 #if DEBUG
                 cmuxDebugLog("link.openURL cmuxBrowser=disabled, opening externally url=\(target.url)")
@@ -8795,6 +8834,22 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
            !workspace.isRemoteTerminalSurface(termSurface.id),
            CmdClickMarkdownRouteSettings.shouldRoute(path: resolution.path),
            workspace.openOrFocusMarkdownSplit(from: termSurface.id, filePath: resolution.path) != nil {
+            return resolution
+        }
+
+        let isReadableRegularFile: Bool = {
+            let resolved = (resolution.path as NSString).resolvingSymlinksInPath
+            guard FileManager.default.isReadableFile(atPath: resolved),
+                  let attrs = try? FileManager.default.attributesOfItem(atPath: resolved) else {
+                return false
+            }
+            return (attrs[.type] as? FileAttributeType) == .typeRegular
+        }()
+        if isReadableRegularFile,
+           let termSurface = terminalSurface,
+           let workspace = termSurface.owningWorkspace(),
+           !workspace.isRemoteTerminalSurface(termSurface.id),
+           workspace.openOrFocusFilePreviewSplit(from: termSurface.id, filePath: resolution.path) != nil {
             return resolution
         }
 

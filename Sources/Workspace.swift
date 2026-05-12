@@ -10281,6 +10281,19 @@ final class Workspace: Identifiable, ObservableObject {
         )
     }
 
+    func openOrFocusFilePreviewSplit(from panelId: UUID, filePath: String) -> FilePreviewPanel? {
+        let canonical = (filePath as NSString).resolvingSymlinksInPath
+        for (_, panel) in panels {
+            guard let preview = panel as? FilePreviewPanel else { continue }
+            if (preview.filePath as NSString).resolvingSymlinksInPath == canonical {
+                focusPanel(preview.id)
+                return preview
+            }
+        }
+        guard let paneId = paneId(forPanelId: panelId) else { return nil }
+        return newFilePreviewSurface(inPane: paneId, filePath: filePath, focus: true)
+    }
+
     func newMarkdownSplit(
         from panelId: UUID,
         orientation: SplitOrientation,
