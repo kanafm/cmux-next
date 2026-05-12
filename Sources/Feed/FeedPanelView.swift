@@ -3492,7 +3492,7 @@ private struct FeedInlineTextField: NSViewRepresentable {
         }
     }
 
-    private func moveFocusToFeedHost(in window: NSWindow) {
+    @MainActor private func moveFocusToFeedHost(in window: NSWindow) {
         if AppDelegate.shared?.focusRightSidebarInActiveMainWindow(
             mode: .feed,
             focusFirstItem: false,
